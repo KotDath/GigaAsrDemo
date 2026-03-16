@@ -1,0 +1,93 @@
+spec:
+  inputs:
+    PSDK_4_VER: 
+      default: $PSDK_4_VER
+    SIGN_PROFILE:
+      default: $SIGN_PROFILE
+---
+
+"build-aurora_$[[ inputs.PSDK_4_VER | expand_vars ]]_armv7hl":
+  stage: build
+  tags:
+    - aurora_psdk_runner
+  artifacts:
+    paths:
+      - ./artifacts/*.rpm
+  script:
+    - chmod +x ./gitlab-ci/build.sh
+    - /home/gitlab-runner/Aurora4PlatformSDK/sdks/aurora_psdk/sdk-chroot ./gitlab-ci/build.sh -a ./ -t AuroraOS-$[[ inputs.PSDK_4_VER | expand_vars ]]-base-armv7hl
+  when: always
+
+
+"build-aurora_$[[ inputs.PSDK_4_VER | expand_vars ]]_i486":
+  stage: build
+  tags:
+    - aurora_psdk_runner
+  artifacts:
+    paths:
+      - ./artifacts/*.rpm
+  script:
+    - chmod +x ./gitlab-ci/build.sh
+    - /home/gitlab-runner/Aurora4PlatformSDK/sdks/aurora_psdk/sdk-chroot ./gitlab-ci/build.sh -a ./ -t AuroraOS-$[[ inputs.PSDK_4_VER | expand_vars ]]-base-i486
+  when: always
+
+
+"sign-aurora_$[[ inputs.PSDK_4_VER | expand_vars ]]_armv7hl":
+  stage: sign
+  needs: ["build-aurora_$[[ inputs.PSDK_4_VER | expand_vars ]]_armv7hl"]
+  dependencies:
+    - "build-aurora_$[[ inputs.PSDK_4_VER | expand_vars ]]_armv7hl"
+  tags:
+    - aurora_psdk_runner
+  artifacts:
+    paths:
+      - ./artifacts/*.rpm
+  script:
+    - chmod +x ./gitlab-ci/sign.sh
+    - /home/gitlab-runner/Aurora4PlatformSDK/sdks/aurora_psdk/sdk-chroot ./gitlab-ci/sign.sh -p $[[ inputs.SIGN_PROFILE | expand_vars ]] -r ./artifacts
+
+
+"sign-aurora_$[[ inputs.PSDK_4_VER | expand_vars ]]_i486":
+  stage: sign
+  needs: ["build-aurora_$[[ inputs.PSDK_4_VER | expand_vars ]]_i486"]
+  dependencies:
+    - "build-aurora_$[[ inputs.PSDK_4_VER | expand_vars ]]_i486"
+  tags:
+    - aurora_psdk_runner
+  artifacts:
+    paths:
+      - ./artifacts/*.rpm
+  script:
+    - chmod +x ./gitlab-ci/sign.sh
+    - /home/gitlab-runner/Aurora4PlatformSDK/sdks/aurora_psdk/sdk-chroot ./gitlab-ci/sign.sh -p $[[ inputs.SIGN_PROFILE | expand_vars ]] -r ./artifacts
+
+
+"validation-aurora_$[[ inputs.PSDK_4_VER | expand_vars ]]_armv7hl":
+  stage: validation
+  needs: ["sign-aurora_$[[ inputs.PSDK_4_VER | expand_vars ]]_armv7hl"]
+  dependencies:
+    - "sign-aurora_$[[ inputs.PSDK_4_VER | expand_vars ]]_armv7hl"
+  tags:
+    - aurora_psdk_runner
+  artifacts:
+    paths:
+      - ./artifacts/*.rpm
+  script:
+    - chmod +x ./gitlab-ci/validate.sh
+    - /home/gitlab-runner/Aurora4PlatformSDK/sdks/aurora_psdk/sdk-chroot ./gitlab-ci/validate.sh -p $[[ inputs.SIGN_PROFILE | expand_vars ]] ./artifacts/*.armv7hl.rpm
+
+
+"validation-aurora_$[[ inputs.PSDK_4_VER | expand_vars ]]_i486":
+  stage: validation
+  needs: ["sign-aurora_$[[ inputs.PSDK_4_VER | expand_vars ]]_i486"]
+  dependencies:
+    - "sign-aurora_$[[ inputs.PSDK_4_VER | expand_vars ]]_i486"
+  tags:
+    - aurora_psdk_runner
+  artifacts:
+    paths:
+      - ./artifacts/*.rpm
+  script:
+    - chmod +x ./gitlab-ci/validate.sh
+    - /home/gitlab-runner/Aurora4PlatformSDK/sdks/aurora_psdk/sdk-chroot ./gitlab-ci/validate.sh -p $[[ inputs.SIGN_PROFILE | expand_vars ]] ./artifacts/*.i486.rpm
+

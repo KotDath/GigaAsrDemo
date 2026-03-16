@@ -1,0 +1,13 @@
+[Desktop Entry]
+Type=Application
+X-Nemo-Application-Type=silica-qt5
+Icon=ru.auroraos.GigaAsrDemo
+Exec=/usr/bin/ru.auroraos.GigaAsrDemo
+Name=GigaAsrDemo
+Name[ru]=GigaAsrDemo
+
+[X-Application]
+Permissions=Microphone
+OrganizationName=ru.auroraos
+ApplicationName=GigaAsrDemo
+ExecDBus=/usr/bin/ru.auroraos.GigaAsrDemo

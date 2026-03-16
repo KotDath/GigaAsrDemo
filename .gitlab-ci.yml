@@ -1,0 +1,9 @@
+stages:
+  - readme_cspell_check
+  - build
+  - sign
+  - validation
+    
+include:
+  - local: 'gitlab-ci/**.yml'
+  

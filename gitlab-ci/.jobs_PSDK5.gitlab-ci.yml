@@ -1,0 +1,127 @@
+spec:
+  inputs:
+    PSDK_5_VER: 
+      default: $PSDK_5_VER
+    SIGN_PROFILE:
+      default: $SIGN_PROFILE
+---
+
+"build-aurora_$[[ inputs.PSDK_5_VER | expand_vars ]]_aarch64":
+  stage: build
+  tags:
+    - aurora_psdk_runner
+  artifacts:
+    paths:
+      - ./artifacts/*.rpm
+  script:
+    - chmod +x ./gitlab-ci/build.sh
+    - /home/gitlab-runner/Aurora5PlatformSDK/sdks/aurora_psdk/sdk-chroot ./gitlab-ci/build.sh -a ./ -t AuroraOS-$[[ inputs.PSDK_5_VER | expand_vars ]]-MB2-aarch64
+  when: always
+
+"build-aurora_$[[ inputs.PSDK_5_VER | expand_vars ]]_armv7hl":
+  stage: build
+  tags:
+    - aurora_psdk_runner
+  artifacts:
+    paths:
+      - ./artifacts/*.rpm
+  script:
+    - chmod +x ./gitlab-ci/build.sh
+    - /home/gitlab-runner/Aurora5PlatformSDK/sdks/aurora_psdk/sdk-chroot ./gitlab-ci/build.sh -a ./ -t AuroraOS-$[[ inputs.PSDK_5_VER | expand_vars ]]-MB2-armv7hl
+  when: always
+
+"build-aurora_$[[ inputs.PSDK_5_VER | expand_vars ]]_x86_64":
+  stage: build
+  tags:
+    - aurora_psdk_runner
+  artifacts:
+    paths:
+      - ./artifacts/*.rpm
+  script:
+    - chmod +x ./gitlab-ci/build.sh
+    - /home/gitlab-runner/Aurora5PlatformSDK/sdks/aurora_psdk/sdk-chroot ./gitlab-ci/build.sh -a ./ -t AuroraOS-$[[ inputs.PSDK_5_VER | expand_vars ]]-MB2-x86_64
+  when: always
+
+"sign-aurora_$[[ inputs.PSDK_5_VER | expand_vars ]]_aarch64":
+  stage: sign
+  needs: ["build-aurora_$[[ inputs.PSDK_5_VER | expand_vars ]]_aarch64"]
+  dependencies:
+    - "build-aurora_$[[ inputs.PSDK_5_VER | expand_vars ]]_aarch64"
+  tags:
+    - aurora_psdk_runner
+  artifacts:
+    paths:
+      - ./artifacts/*.rpm
+  script:
+    - chmod +x ./gitlab-ci/sign.sh
+    - /home/gitlab-runner/Aurora5PlatformSDK/sdks/aurora_psdk/sdk-chroot ./gitlab-ci/sign.sh -p $[[ inputs.SIGN_PROFILE | expand_vars ]] -r ./artifacts
+
+"sign-aurora_$[[ inputs.PSDK_5_VER | expand_vars ]]_armv7hl":
+  stage: sign
+  needs: ["build-aurora_$[[ inputs.PSDK_5_VER | expand_vars ]]_armv7hl"]
+  dependencies:
+    - "build-aurora_$[[ inputs.PSDK_5_VER | expand_vars ]]_armv7hl"
+  tags:
+    - aurora_psdk_runner
+  artifacts:
+    paths:
+      - ./artifacts/*.rpm
+  script:
+    - chmod +x ./gitlab-ci/sign.sh
+    - /home/gitlab-runner/Aurora5PlatformSDK/sdks/aurora_psdk/sdk-chroot ./gitlab-ci/sign.sh -p $[[ inputs.SIGN_PROFILE | expand_vars ]] -r ./artifacts
+
+"sign-aurora_$[[ inputs.PSDK_5_VER | expand_vars ]]_x86_64":
+  stage: sign
+  needs: ["build-aurora_$[[ inputs.PSDK_5_VER | expand_vars ]]_x86_64"]
+  dependencies:
+    - "build-aurora_$[[ inputs.PSDK_5_VER | expand_vars ]]_x86_64"
+  tags:
+    - aurora_psdk_runner
+  artifacts:
+    paths:
+      - ./artifacts/*.rpm
+  script:
+    - chmod +x ./gitlab-ci/sign.sh
+    - /home/gitlab-runner/Aurora5PlatformSDK/sdks/aurora_psdk/sdk-chroot ./gitlab-ci/sign.sh -p $[[ inputs.SIGN_PROFILE | expand_vars ]] -r ./artifacts
+
+"validation-aurora_$[[ inputs.PSDK_5_VER | expand_vars ]]_aarch64":
+  stage: validation
+  needs: ["sign-aurora_$[[ inputs.PSDK_5_VER | expand_vars ]]_aarch64"]
+  dependencies:
+    - "sign-aurora_$[[ inputs.PSDK_5_VER | expand_vars ]]_aarch64"
+  tags:
+    - aurora_psdk_runner
+  artifacts:
+    paths:
+      - ./artifacts/*.rpm
+  script:
+    - chmod +x ./gitlab-ci/validate.sh
+    - /home/gitlab-runner/Aurora4PlatformSDK/sdks/aurora_psdk/sdk-chroot ./gitlab-ci/validate.sh -p $[[ inputs.SIGN_PROFILE | expand_vars ]] ./artifacts/*.aarch64.rpm
+
+"validation-aurora_$[[ inputs.PSDK_5_VER | expand_vars ]]_armv7hl":
+  stage: validation
+  needs: ["sign-aurora_$[[ inputs.PSDK_5_VER | expand_vars ]]_armv7hl"]
+  dependencies:
+    - "sign-aurora_$[[ inputs.PSDK_5_VER | expand_vars ]]_armv7hl"
+  tags:
+    - aurora_psdk_runner
+  artifacts:
+    paths:
+      - ./artifacts/*.rpm
+  script:
+    - chmod +x ./gitlab-ci/validate.sh
+    - /home/gitlab-runner/Aurora4PlatformSDK/sdks/aurora_psdk/sdk-chroot ./gitlab-ci/validate.sh -p $[[ inputs.SIGN_PROFILE | expand_vars ]] ./artifacts/*.armv7hl.rpm
+
+"validation-aurora_$[[ inputs.PSDK_5_VER | expand_vars ]]_x86_64":
+  stage: validation
+  needs: ["sign-aurora_$[[ inputs.PSDK_5_VER | expand_vars ]]_x86_64"]
+  dependencies:
+    - "sign-aurora_$[[ inputs.PSDK_5_VER | expand_vars ]]_x86_64"
+  tags:
+    - aurora_psdk_runner
+  artifacts:
+    paths:
+      - ./artifacts/*.rpm
+  script:
+    - chmod +x ./gitlab-ci/validate.sh
+    - /home/gitlab-runner/Aurora4PlatformSDK/sdks/aurora_psdk/sdk-chroot ./gitlab-ci/validate.sh -p $[[ inputs.SIGN_PROFILE | expand_vars ]] ./artifacts/*.x86_64.rpm
