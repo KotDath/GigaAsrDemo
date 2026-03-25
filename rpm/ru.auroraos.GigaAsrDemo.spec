@@ -4,7 +4,7 @@
 %define _cmake_skip_rpath %{nil}
 
 %define __provides_exclude_from ^%{_datadir}/%{name}/lib/.*$
-%define __requires_exclude ^(libabsl.*|libcpuinfo.*|libcrypto.*|libcurl.*|libdate.*|libflatbuffers.*|libnsync.*|libonnx.*|libonnxruntime.*|libprotobuf.*|libre2.*|libssl.*|libz.*|libatomic.*|libXNNPACK.*|libpthreadpool.*)$
+%define __requires_exclude ^(libabsl.*|libcpuinfo.*|libcrypto.*|libcurl.*|libdate.*|libflatbuffers.*|libnsync.*|libonnx.*|libonnxruntime.*|libprotobuf.*|libre2.*|libssl.*|libz.*|libatomic.*|libXNNPACK.*|libpthreadpool.*|libgomp.*|libllama.*|libggml.*|libcommon.*)$
 
 Name:       ru.auroraos.GigaAsrDemo
 Summary:    Speech-to-text demo for GigaAM
@@ -20,6 +20,9 @@ BuildRequires:  pkgconfig(Qt5Core)
 BuildRequires:  pkgconfig(Qt5Qml)
 BuildRequires:  pkgconfig(Qt5Quick)
 BuildRequires:  pkgconfig(Qt5Multimedia)
+BuildRequires:  pkgconfig(Qt5DBus)
+BuildRequires:  cmake
+BuildRequires:  ninja
 BuildRequires:  conan
 
 %description
@@ -79,6 +82,7 @@ EOF
     export PATH="$LDD_WRAPPER_DIR:$PATH"
 fi
 conan-deploy-libraries "$EXECUTABLE" "$CONAN_LIB_DIR" "$SHARED_LIBRARIES"
+cp -rf %{_libdir}/libgomp* "$SHARED_LIBRARIES"
 
 %files
 %defattr(-,root,root,-)

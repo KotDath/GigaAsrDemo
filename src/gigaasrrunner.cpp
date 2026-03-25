@@ -10,10 +10,12 @@
 #include <QTimer>
 
 #include "asrworker.h"
+#include "commandworker.h"
 
 GigaAsrRunner::GigaAsrRunner(QObject *parent)
     : QObject(parent)
     , m_worker(new AsrWorker())
+    , m_commandWorker(new CommandWorker())
 {
     qRegisterMetaType<QAudioFormat>("QAudioFormat");
 
@@ -27,9 +29,23 @@ GigaAsrRunner::GigaAsrRunner(QObject *parent)
             this, SLOT(onWorkerTranscriptionFinished(quint64,QString,QString)));
     m_workerThread.start();
 
-    qDebug() << "GigaAsrRunner: worker thread started";
-    setStatusText(tr("Loading model..."));
+    m_commandWorker->moveToThread(&m_commandThread);
+    connect(this, SIGNAL(requestCommandModelLoad(QString)),
+            m_commandWorker, SLOT(loadModel(QString)));
+    connect(this, SIGNAL(requestCommandProcessing(QString,quint64)),
+            m_commandWorker, SLOT(processTranscript(QString,quint64)));
+    connect(m_commandWorker, SIGNAL(modelLoaded(bool,QString)),
+            this, SLOT(onCommandModelLoaded(bool,QString)));
+    connect(m_commandWorker, SIGNAL(toolExecutionStarted(quint64,QString)),
+            this, SLOT(onCommandExecutionStarted(quint64,QString)));
+    connect(m_commandWorker, SIGNAL(commandFinished(quint64,QString,QString,QString)),
+            this, SLOT(onCommandFinished(quint64,QString,QString,QString)));
+    m_commandThread.start();
+
+    qDebug() << "GigaAsrRunner: worker threads started";
+    setStatusText(tr("Loading models..."));
     QTimer::singleShot(0, this, SLOT(loadModel()));
+    QTimer::singleShot(0, this, SLOT(loadCommandModel()));
 }
 
 GigaAsrRunner::~GigaAsrRunner()
@@ -37,9 +53,13 @@ GigaAsrRunner::~GigaAsrRunner()
     qDebug() << "GigaAsrRunner: destroying";
     resetAudioCapture();
     m_workerThread.quit();
+    m_commandThread.quit();
     m_workerThread.wait();
+    m_commandThread.wait();
     delete m_worker;
     m_worker = nullptr;
+    delete m_commandWorker;
+    m_commandWorker = nullptr;
 }
 
 void GigaAsrRunner::loadModel()
@@ -57,20 +77,37 @@ void GigaAsrRunner::loadModel()
     emit requestModelLoad(resolveModelDirectory());
 }
 
+void GigaAsrRunner::loadCommandModel()
+{
+    qDebug() << "GigaAsrRunner::loadCommandModel: requested";
+    if (m_isCommandModelLoading) {
+        qDebug() << "GigaAsrRunner::loadCommandModel: already running";
+        return;
+    }
+
+    m_isCommandModelLoading = true;
+    setCommandModelLoaded(false);
+    updateReadyStatus();
+    emit requestCommandModelLoad(resolveCommandModelPath());
+}
+
 void GigaAsrRunner::toggleRecording()
 {
     qDebug() << "GigaAsrRunner::toggleRecording:"
              << "isModelLoaded=" << m_isModelLoaded
+             << "isCommandModelLoaded=" << m_isCommandModelLoaded
              << "isRecording=" << m_isRecording
              << "isTranscribing=" << m_isTranscribing
+             << "isAnalyzing=" << m_isAnalyzing
+             << "isExecuting=" << m_isExecuting
              << "isModelLoading=" << m_isModelLoading;
 
     if (!m_isModelLoaded) {
-        setErrorText(tr("Model is not loaded yet."));
+        setErrorText(tr("Speech model is not loaded yet."));
         return;
     }
 
-    if (m_isTranscribing || m_isModelLoading) {
+    if (m_isTranscribing || m_isAnalyzing || m_isExecuting || m_isModelLoading) {
         return;
     }
 
@@ -107,7 +144,7 @@ void GigaAsrRunner::handleAudioStateChanged(QAudio::State state)
 
     if (state == QAudio::StoppedState && m_audioInput->error() != QAudio::NoError && m_isRecording) {
         setRecording(false);
-        setStatusText(tr("Ready to record"));
+        updateReadyStatus();
         setErrorText(tr("Audio capture failed."));
         resetAudioCapture();
     }
@@ -122,12 +159,12 @@ void GigaAsrRunner::onWorkerModelLoaded(bool success, const QString &errorText)
     m_isModelLoading = false;
     setModelLoaded(success);
     if (success) {
-        setStatusText(tr("Ready to record"));
         setErrorText(QString());
+        updateReadyStatus();
         return;
     }
 
-    setStatusText(tr("Model is not loaded"));
+    updateReadyStatus();
     setErrorText(errorText.isEmpty() ? tr("Failed to load speech model.") : errorText);
 }
 
@@ -145,18 +182,89 @@ void GigaAsrRunner::onWorkerTranscriptionFinished(quint64 requestId,
              << "transcriptLength=" << transcript.length()
              << "errorText=" << errorText;
 
-    m_activeRequestId = 0;
     setTranscribing(false);
 
     if (!errorText.isEmpty()) {
-        setStatusText(tr("Ready to record"));
+        m_activeRequestId = 0;
+        updateReadyStatus();
         setErrorText(errorText);
         return;
     }
 
     setTranscript(transcript);
-    setStatusText(tr("Recognition finished"));
     setErrorText(QString());
+    setRecognizedAction(QString());
+    setExecutionResult(QString());
+
+    if (!m_isCommandModelLoaded) {
+        m_activeRequestId = 0;
+        setStatusText(tr("Recognition finished"));
+        setExecutionResult(tr("Command model is not loaded. Transcript only."));
+        return;
+    }
+
+    setAnalyzing(true);
+    setStatusText(tr("Analyzing command..."));
+    emit requestCommandProcessing(transcript, requestId);
+}
+
+void GigaAsrRunner::onCommandModelLoaded(bool success, const QString &errorText)
+{
+    qDebug() << "GigaAsrRunner::onCommandModelLoaded:"
+             << "success=" << success
+             << "errorText=" << errorText;
+
+    m_isCommandModelLoading = false;
+    setCommandModelLoaded(success);
+    if (!success) {
+        qWarning() << "GigaAsrRunner::onCommandModelLoaded: command model unavailable:" << errorText;
+    }
+    updateReadyStatus();
+}
+
+void GigaAsrRunner::onCommandExecutionStarted(quint64 requestId, const QString &prettyCall)
+{
+    if (requestId != m_activeRequestId) {
+        qDebug() << "GigaAsrRunner::onCommandExecutionStarted: ignoring stale requestId =" << requestId;
+        return;
+    }
+
+    setRecognizedAction(prettyCall);
+    setAnalyzing(false);
+    setExecuting(true);
+    setStatusText(tr("Executing action..."));
+}
+
+void GigaAsrRunner::onCommandFinished(quint64 requestId,
+                                      const QString &prettyCall,
+                                      const QString &resultText,
+                                      const QString &errorText)
+{
+    if (requestId != m_activeRequestId) {
+        qDebug() << "GigaAsrRunner::onCommandFinished: ignoring stale requestId =" << requestId;
+        return;
+    }
+
+    qDebug() << "GigaAsrRunner::onCommandFinished:"
+             << "requestId=" << requestId
+             << "prettyCall=" << prettyCall
+             << "resultText=" << resultText
+             << "errorText=" << errorText;
+
+    m_activeRequestId = 0;
+    setAnalyzing(false);
+    setExecuting(false);
+    setRecognizedAction(prettyCall);
+    setExecutionResult(resultText);
+
+    if (!errorText.isEmpty()) {
+        setStatusText(tr("Action failed"));
+        setErrorText(errorText);
+        return;
+    }
+
+    setErrorText(QString());
+    setStatusText(prettyCall.isEmpty() ? tr("No supported action detected") : tr("Done"));
 }
 
 void GigaAsrRunner::setModelLoaded(bool value)
@@ -167,6 +275,16 @@ void GigaAsrRunner::setModelLoaded(bool value)
 
     m_isModelLoaded = value;
     emit isModelLoadedChanged();
+}
+
+void GigaAsrRunner::setCommandModelLoaded(bool value)
+{
+    if (m_isCommandModelLoaded == value) {
+        return;
+    }
+
+    m_isCommandModelLoaded = value;
+    emit isCommandModelLoadedChanged();
 }
 
 void GigaAsrRunner::setRecording(bool value)
@@ -189,6 +307,26 @@ void GigaAsrRunner::setTranscribing(bool value)
     emit isTranscribingChanged();
 }
 
+void GigaAsrRunner::setAnalyzing(bool value)
+{
+    if (m_isAnalyzing == value) {
+        return;
+    }
+
+    m_isAnalyzing = value;
+    emit isAnalyzingChanged();
+}
+
+void GigaAsrRunner::setExecuting(bool value)
+{
+    if (m_isExecuting == value) {
+        return;
+    }
+
+    m_isExecuting = value;
+    emit isExecutingChanged();
+}
+
 void GigaAsrRunner::setTranscript(const QString &value)
 {
     if (m_transcript == value) {
@@ -197,6 +335,26 @@ void GigaAsrRunner::setTranscript(const QString &value)
 
     m_transcript = value;
     emit transcriptChanged();
+}
+
+void GigaAsrRunner::setRecognizedAction(const QString &value)
+{
+    if (m_recognizedAction == value) {
+        return;
+    }
+
+    m_recognizedAction = value;
+    emit recognizedActionChanged();
+}
+
+void GigaAsrRunner::setExecutionResult(const QString &value)
+{
+    if (m_executionResult == value) {
+        return;
+    }
+
+    m_executionResult = value;
+    emit executionResultChanged();
 }
 
 void GigaAsrRunner::setStatusText(const QString &value)
@@ -219,9 +377,31 @@ void GigaAsrRunner::setErrorText(const QString &value)
     emit errorTextChanged();
 }
 
+void GigaAsrRunner::updateReadyStatus()
+{
+    if (m_isModelLoading || m_isCommandModelLoading) {
+        setStatusText(tr("Loading models..."));
+        return;
+    }
+
+    if (!m_isModelLoaded) {
+        setStatusText(tr("Speech model is not loaded"));
+        return;
+    }
+
+    setStatusText(m_isCommandModelLoaded
+                  ? tr("Ready to record")
+                  : tr("Ready to record (command model unavailable)"));
+}
+
 QString GigaAsrRunner::resolveModelDirectory() const
 {
     return QStringLiteral("/usr/share/ru.auroraos.GigaAsrDemo/models/gigaam-v3-e2e-rnnt");
+}
+
+QString GigaAsrRunner::resolveCommandModelPath() const
+{
+    return QStringLiteral("/usr/share/ru.auroraos.GigaAsrDemo/models/functiongemma");
 }
 
 bool GigaAsrRunner::startRecording()
@@ -237,7 +417,11 @@ bool GigaAsrRunner::startRecording()
 
     resetAudioCapture();
     setTranscript(QString());
+    setRecognizedAction(QString());
+    setExecutionResult(QString());
     setErrorText(QString());
+    setAnalyzing(false);
+    setExecuting(false);
 
     QAudioFormat requestedFormat;
     requestedFormat.setCodec(QStringLiteral("audio/pcm"));

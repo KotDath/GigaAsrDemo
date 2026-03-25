@@ -38,8 +38,39 @@ Page {
             BusyIndicator {
                 anchors.horizontalCenter: parent.horizontalCenter
                 size: BusyIndicatorSize.Large
-                running: gigaAsrRunner && gigaAsrRunner.isTranscribing
+                running: gigaAsrRunner
+                         && (gigaAsrRunner.isTranscribing
+                             || gigaAsrRunner.isAnalyzing
+                             || gigaAsrRunner.isExecuting)
                 visible: running
+            }
+
+            Label {
+                anchors.left: parent.left
+                anchors.right: parent.right
+                anchors.leftMargin: Theme.horizontalPageMargin
+                anchors.rightMargin: Theme.horizontalPageMargin
+                color: Theme.primaryColor
+                font.pixelSize: Theme.fontSizeExtraSmall
+                wrapMode: Text.WordWrap
+                horizontalAlignment: Text.AlignHCenter
+                visible: gigaAsrRunner && gigaAsrRunner.recognizedAction.length > 0
+                text: gigaAsrRunner
+                      ? qsTr("Action: %1").arg(gigaAsrRunner.recognizedAction)
+                      : ""
+            }
+
+            Label {
+                anchors.left: parent.left
+                anchors.right: parent.right
+                anchors.leftMargin: Theme.horizontalPageMargin
+                anchors.rightMargin: Theme.horizontalPageMargin
+                color: Theme.secondaryColor
+                font.pixelSize: Theme.fontSizeExtraSmall
+                wrapMode: Text.WordWrap
+                horizontalAlignment: Text.AlignHCenter
+                visible: gigaAsrRunner && gigaAsrRunner.executionResult.length > 0
+                text: gigaAsrRunner ? gigaAsrRunner.executionResult : ""
             }
 
             Label {
@@ -77,6 +108,8 @@ Page {
                 enabled: gigaAsrRunner
                          && gigaAsrRunner.isModelLoaded
                          && !gigaAsrRunner.isTranscribing
+                         && !gigaAsrRunner.isAnalyzing
+                         && !gigaAsrRunner.isExecuting
                 onClicked: gigaAsrRunner.toggleRecording()
             }
 
@@ -91,6 +124,21 @@ Page {
                 horizontalAlignment: Text.AlignHCenter
                 visible: gigaAsrRunner && !gigaAsrRunner.isModelLoaded
                 text: qsTr("The speech model is loading. The button will become active when loading finishes.")
+            }
+
+            Label {
+                anchors.left: parent.left
+                anchors.right: parent.right
+                anchors.leftMargin: Theme.horizontalPageMargin
+                anchors.rightMargin: Theme.horizontalPageMargin
+                color: Theme.secondaryColor
+                font.pixelSize: Theme.fontSizeExtraSmall
+                wrapMode: Text.WordWrap
+                horizontalAlignment: Text.AlignHCenter
+                visible: gigaAsrRunner
+                         && gigaAsrRunner.isModelLoaded
+                         && !gigaAsrRunner.isCommandModelLoaded
+                text: qsTr("The command model is loading or unavailable. Speech will still be transcribed.")
             }
         }
 

@@ -4,11 +4,13 @@
 cmake_minimum_required(VERSION 3.5)
 project(ru.auroraos.GigaAsrDemo CXX)
 
-find_package(Qt5 COMPONENTS Core Network Qml Gui Quick Multimedia LinguistTools REQUIRED)
+find_package(Qt5 COMPONENTS Core Network Qml Gui Quick Multimedia DBus LinguistTools REQUIRED)
+find_package(OpenMP REQUIRED)
 
 include(FindPkgConfig)
 pkg_search_module(AURORA auroraapp REQUIRED)
 pkg_search_module(AURORA auroraapp_i18n REQUIRED)
+pkg_check_modules(LLAMACPP REQUIRED IMPORTED_TARGET llama-cpp)
 
 set(CMAKE_AUTOMOC ON)
 set(CMAKE_INCLUDE_CURRENT_DIR ON)
@@ -26,8 +28,12 @@ qt5_add_translation(QmFiles ${TsFiles})
 set(SOURCES
     src/main.cpp
     src/asrworker.cpp
+    src/commandmodelmanager.cpp
+    src/commandworker.cpp
+    src/functioncallengine.cpp
     src/gigaasrrunner.cpp
     src/rnntrecognizer.cpp
+    src/toolexecutor.cpp
 )
 
 set(CMAKE_SKIP_RPATH FALSE)
@@ -46,8 +52,11 @@ target_include_directories(${PROJECT_NAME} PRIVATE
 target_link_libraries(${PROJECT_NAME} PRIVATE
     Qt5::Quick
     Qt5::Multimedia
+    Qt5::DBus
     ${AURORA_LDFLAGS}
     PkgConfig::onnxruntime
+    PkgConfig::LLAMACPP
+    OpenMP::OpenMP_CXX
 )
 
 install(TARGETS ${PROJECT_NAME}

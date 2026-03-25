@@ -6,4 +6,5 @@ class Application(ConanFile):
 
     requires = (
         "onnxruntime/1.18.1@aurora",
+        "llama-cpp/b8188@aurora",
     )
